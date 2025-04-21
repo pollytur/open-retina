@@ -68,14 +68,6 @@ def standard_early_stop_trainer(
             return 0
         else:
             return base_multiplier
-        """elif dec_warumup_epoch == dec_starting_epoch:
-            return base_multiplier
-            elif dec_warumup_epoch >= epoch >= dec_starting_epoch:
-            return (
-                base_multiplier
-                * (epoch - dec_starting_epoch)
-                / (dec_warumup_epoch - dec_starting_epoch)
-            )"""
 
     def soft_assignments(encoded_features, cluster_centers, alpha=alpha):
         """
@@ -313,6 +305,12 @@ def standard_early_stop_trainer(
 
         # train over batches
         optimizer.zero_grad()
+        epoch_loss = 0
+        # epoch_loss_main = 0
+        # epoch_loss_reg = 0
+        epoch_loss_kldiv = 0
+        epoch_loss_kldiv_without_scaling = 0
+        # epoch_kldiv_loss_regularizer = 0
         for batch_no, (data_key, data) in tqdm(
             enumerate(LongCycler(trainloaders)),
             total=n_iterations,
@@ -381,9 +379,13 @@ def standard_early_stop_trainer(
                     "train_loss": loss.item(),
                     "lr": optimizer.param_groups[0]["lr"],
                     "epoch": epoch,
+                    "Batch": batch_no,
                     "val_corr": tracker_info["val_correlation"][-1],
                     "val_poisson_loss": tracker_info["val_poisson_loss"][-1],
                     "val_MSE_loss": tracker_info["val_MSE_loss"][-1],
+
+                    "Epoch Train loss Kullback-Leibler-divergence": epoch_loss_kldiv,
+                    "Epoch Train loss KL without scaling main": epoch_loss_kldiv_without_scaling,
                 }
             )
 
@@ -411,10 +413,12 @@ def standard_early_stop_trainer(
 
     # return the whole tracker output as a dict
     output = tracker.asdict()
-
     if include_kldivergence:
-        return avg_test_corr, avg_val_corr, output, cluster_centers_np, predicted, model.state_dict()
+        output['cluster_centers_np'] = cluster_centers_np
+        output['predicted'] = predicted
 
+    if wandb_logger is not None:
+        wandb.finish()
     return avg_test_corr, avg_val_corr, output, model.state_dict()
 
 
